@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs><mask id="holes" maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+    <circle cx="50" cy="50" r="50" fill="white"/>
+    <g fill="black"><circle cx="36.8" cy="36.8" r="8.4"/><circle cx="63.2" cy="36.8" r="8.4"/><circle cx="36.8" cy="63.2" r="8.4"/><circle cx="63.2" cy="63.2" r="8.4"/></g>
+  </mask></defs>
+  <circle cx="50" cy="50" r="50" fill="#215037" mask="url(#holes)"/>
+</svg>
