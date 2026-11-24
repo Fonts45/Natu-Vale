@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Natus | Atendimento Natu Vale</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#173229;background:#edf2ef;--forest:#123e2e;--line:#d9e4dc}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+button,input,select,textarea{font:inherit}
+button,select,input,textarea{border:1px solid #a7bdb0;border-radius:9px;padding:.65rem .85rem}
+button{cursor:pointer;background:white;color:var(--forest);font-weight:650}
+button:hover{background:#e3eee7}
+.primary{background:var(--forest);color:white;border-color:var(--forest)}
+.primary:hover{background:#246349}
+header{background:var(--forest);color:white;display:flex;justify-content:space-between;align-items:center;padding:1rem clamp(1rem,4vw,3rem);gap:1rem}
+header strong{font-size:1.4rem}
+header span{margin-left:.65rem}
+h1,h2,p{margin:0}
+main{max-width:1380px;margin:auto;padding:clamp(1rem,3vw,2.5rem)}
+#login{max-width:420px;margin:5vh auto;background:white;padding:2rem;border-radius:16px;display:grid;gap:1rem}
+label{display:grid;gap:.3rem}
+#workspace{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:1rem}
+aside,article{background:white;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.section,#messages,#composer,#demo{padding:1rem}
+.section{display:grid;gap:.75rem;border-bottom:1px solid var(--line)}
+#queue button{width:100%;border:0;border-radius:0;border-bottom:1px solid var(--line);display:grid;text-align:left;gap:.25rem}
+#queue button[aria-pressed=true]{background:#e1efe5;box-shadow:inset 4px 0 #358454}
+small,#status{color:#4e6458}
+#messages{display:flex;flex-direction:column;gap:.65rem;background:#f4f7f4;height:clamp(250px,43vh,550px);overflow:auto}
+.message{background:white;border:1px solid var(--line);padding:.65rem .9rem;border-radius:12px;max-width:90%;align-self:flex-start}
+.message.out{background:#dbeddf;align-self:flex-end}
+.message p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:.25rem}
+.actions,#composer,.demo-actions{display:flex;flex-wrap:wrap;gap:.5rem}
+textarea{flex:1;min-width:160px;resize:vertical}
+#demo{border-top:1px solid var(--line)}
+summary{cursor:pointer;margin-bottom:.65rem}
+#error{color:#862920;margin-bottom:.8rem}
+@media(max-width:680px){#workspace{grid-template-columns:1fr}#queue{max-height:180px;overflow:auto}header span{display:block;margin:0}#messages{height:38vh}}
+</style>
+<header><div><strong>Natus</strong><span>Atendimento Natu Vale</span></div><div id="account" hidden><span id="agent"></span> <button id="logout">Sair</button></div></header>
+<main>
+<p id="error" role="alert" hidden></p>
+<form id="login">
+<h1>Entrar no painel</h1>
+<label>Usuário<input name="name" autocomplete="username" required></label>
+<label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+<button class="primary">Entrar</button>
+</form>
+<div id="workspace" hidden>
+<aside>
+<div class="section"><h2>Conversas</h2><label>Status<select id="filter"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="humano">Em atendimento humano</option><option value="natus">Com o Natus</option><option value="resolvido">Resolvidas</option></select></label></div>
+<div id="queue"></div>
+</aside>
+<article>
+<div class="section"><h2 id="contact">Selecione uma conversa</h2><p id="status"></p><div class="actions" id="actions">
+<button data-action="claim" class="primary">Assumir conversa</button>
+<button data-action="release">Devolver ao Natus</button>
+<button data-action="resolve">Encerrar conversa</button>
+</div></div>
+<div id="messages" role="log" aria-label="Histórico de mensagens"></div>
+<form id="composer" hidden><textarea aria-label="Mensagem ao cliente" placeholder="Escreva uma mensagem" rows="2" required maxlength="4096"></textarea><button class="primary">Enviar</button></form>
+<details id="demo" hidden><summary>Simulação local</summary><form id="simulation" class="demo-actions">
+<textarea id="simText" aria-label="Mensagem de teste" placeholder="Digite uma mensagem de teste" rows="2" maxlength="4096"></textarea>
+<button name="action" value="demo">Simular cliente</button>
+<button name="action" value="demo-whatsapp">Simular resposta no WhatsApp</button>
+<button name="action" value="demo-reminder">Simular 20 minutos</button>
+</form></details>
+</article></div></main>
+<script>
+const byId = id => document.getElementById(id);
+const labels = { pendente:'Pendente', humano:'Em atendimento humano', natus:'Com o Natus', resolvido:'Resolvida' };
+const buttons = [...document.querySelectorAll('[data-action]')];
+const messages = byId('messages');
+const login = byId('login');
+const composer = byId('composer');
+let selected = null;
+let user = null;
+let rendered = '';
+let loading = false;
+let busy = false;
+
+function showError(error) {
+  byId('error').textContent = error?.message || '';
+  byId('error').hidden = !error;
+}
+
+async function api(path, body) {
+  const response = await fetch(path, body === undefined ? {} : {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  });
+  const data = await response.json();
+  if (!response.ok) throw Object.assign(new Error(data.error), {status:response.status});
+  return data;
+}
+
+function signedOut() {
+  user = null;
+  selected = null;
+  login.hidden = false;
+  byId('workspace').hidden = true;
+  byId('account').hidden = true;
+}
+
+async function refresh() {
+  if (loading) return;
+  loading = true;
+  const requested = selected;
+  try {
+    const data = await api('/api/chats' + (requested ? '?id=' + encodeURIComponent(requested) : ''));
+    if (requested !== selected) return;
+    user = data.name;
+    login.hidden = true;
+    byId('workspace').hidden = false;
+    byId('account').hidden = false;
+    byId('agent').textContent = user;
+    const filter = byId('filter').value;
+    const queue = byId('queue');
+    queue.replaceChildren();
+    for (const chat of data.chats.filter(item => !filter || item.status === filter)) {
+      const button = document.createElement('button');
+      const detail = document.createElement('small');
+      button.textContent = chat.id;
+      button.setAttribute('aria-pressed', chat.id === selected);
+      detail.textContent = labels[chat.status] + (chat.alert ? ' · Precisa de atenção' : '');
+      button.append(detail);
+      button.onclick = () => {
+        selected = chat.id;
+        composer.querySelector('textarea').value = '';
+        refresh();
+      };
+      queue.append(button);
+    }
+    if (!queue.children.length) queue.textContent = 'Nenhuma conversa neste status.';
+    const chat = data.chats.find(item => item.id === selected);
+    byId('contact').textContent = chat?.id || 'Selecione uma conversa';
+    byId('status').textContent = chat ? [labels[chat.status], chat.owner, chat.alert && 'Precisa de atenção'].filter(Boolean).join(' · ') : '';
+    const own = chat?.status === 'humano' && chat.owner === user;
+    const app = chat?.owner === 'WhatsApp Business';
+    buttons[0].hidden = !chat || chat.status === 'resolvido' || (chat.status === 'humano' && !app);
+    buttons[1].hidden = !(own || app);
+    buttons[2].hidden = !chat || chat.status === 'resolvido' || (chat.status === 'humano' && !own && !app);
+    composer.hidden = !own;
+    byId('demo').hidden = !data.demo || !chat;
+    const snapshot = JSON.stringify([selected, data.messages]);
+    if (snapshot === rendered) return;
+    rendered = snapshot;
+    messages.replaceChildren();
+    for (const message of data.messages) {
+      const bubble = document.createElement('div');
+      bubble.className = 'message' + (message.actor === 'Cliente' ? '' : ' out');
+      const meta = document.createElement('small');
+      meta.textContent = message.actor + ' · ' + new Date(message.at).toLocaleString('pt-BR', {dateStyle:'short',timeStyle:'short'});
+      const body = document.createElement('p');
+      body.textContent = message.body;
+      bubble.append(meta, body);
+      messages.append(bubble);
+    }
+    messages.scrollTop = messages.scrollHeight;
+  } catch (error) {
+    if (error.status === 401) signedOut();
+    else showError(error);
+  } finally {
+    loading = false;
+    if (requested !== selected && user) refresh();
+  }
+}
+
+async function act(action, body) {
+  if (busy) return false;
+  busy = true;
+  showError();
+  try {
+    await api('/api/action', {id:selected, action, body});
+    if (action === 'logout') signedOut();
+    else await refresh();
+    return true;
+  } catch (error) {
+    if (error.status === 401) signedOut();
+    showError(error);
+    return false;
+  } finally {
+    busy = false;
+  }
+}
+
+login.onsubmit = async event => {
+  event.preventDefault();
+  showError();
+  try {
+    await api('/api/login', Object.fromEntries(new FormData(login)));
+    login.reset();
+    await refresh();
+  } catch (error) { showError(error); }
+};
+byId('logout').onclick = () => act('logout');
+byId('filter').onchange = refresh;
+for (const button of buttons) button.onclick = () => act(button.dataset.action);
+composer.onsubmit = async event => {
+  event.preventDefault();
+  const input = composer.querySelector('textarea');
+  if (await act('send', input.value)) composer.reset();
+};
+byId('simulation').onsubmit = async event => {
+  event.preventDefault();
+  if (await act(event.submitter.value, byId('simText').value)) byId('simulation').reset();
+};
+refresh();
+setInterval(() => { if (user && !busy) refresh(); }, 3500);
+</script>
+</html>

@@ -1,0 +1,20 @@
+.history-photo-stack{width:100%;margin:24px 0 0;padding:12px 0 0;display:grid;place-items:center}
+.history-photo-stack-stage{position:relative;width:88%;margin-left:2%;justify-self:start;aspect-ratio:1;touch-action:pan-y;isolation:isolate;outline:none}
+.history-photo-stack-stage:focus-visible{outline:0;filter:drop-shadow(0 0 3px #4a4a4a)}
+.history-photo-stack-card{position:absolute;inset:0;border-radius:16px;overflow:hidden;border:0;padding:0;background:#f0ece5;box-shadow:0 16px 30px -10px #0005;transform-origin:50% 75%;transition:transform .5s cubic-bezier(.22,1,.36,1);user-select:none;will-change:transform;cursor:grab}
+.history-photo-stack-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;-webkit-user-drag:none}
+.history-photo-stack-card.is-dragging{transition:none;cursor:grabbing}
+@media(prefers-reduced-motion:reduce){.history-photo-stack-card{transition:none}}
+.history-photo-viewer{position:fixed;inset:0;width:100vw;max-width:none;height:100dvh;max-height:none;margin:0;padding:48px 20px;border:0;background:transparent;overflow:hidden;box-sizing:border-box}
+.history-photo-viewer[open]{display:grid;place-items:center}
+.history-photo-viewer::backdrop{background:rgba(0,25,15,.88);animation:history-viewer-backdrop .35s ease both}
+.history-photo-viewer.is-closing::backdrop{animation:history-viewer-backdrop-out .28s ease both}
+.history-photo-viewer>img{display:block;width:auto;height:auto;max-width:calc(100vw - 40px);max-height:calc(100dvh - 96px);object-fit:contain;border-radius:16px;box-shadow:0 24px 80px #0005;transform-origin:center}
+.history-photo-viewer-close{position:absolute;top:14px;right:16px;z-index:2;width:42px;height:42px;border:1px solid #21503730;border-radius:50%;display:grid;place-items:center;background:#fff;color:#215037;font-size:28px;cursor:pointer}
+.history-photo-viewer-close:focus-visible{outline:none;text-decoration:underline}
+@keyframes history-viewer-backdrop{from{opacity:0}to{opacity:1}}
+@keyframes history-viewer-backdrop-out{from{opacity:1}to{opacity:0}}
+@media(prefers-reduced-motion:reduce){.history-photo-viewer::backdrop{animation:none!important}}
+.history-photo-stack .history-photo-stack-hint{margin:60px 0 0;text-align:center;color:#215037;font-size:14px;line-height:1.5}
+
+.history-drawer .history-drawer-inner{padding-bottom:20px}
